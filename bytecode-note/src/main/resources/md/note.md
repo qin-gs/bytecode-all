@@ -207,3 +207,64 @@ StackOverflowError：线程请求分配的栈容量超过虚拟机允许的最�
   dup：复制栈顶元素放入栈顶 (创建对象)
 
   swap：交换栈顶元素
+
+
+
+- 运算 和 类型转换指令 (iadd, isub, idiv, imul, irem, ineg, iand, ior, ixor)
+
+  不同数据类型运算时涉及类型转换
+
+  - 宽化数据类型  (boolean, char, byte, short) -> int
+  - 窄化数据类型(精度丢失)
+
+
+
+- 控制转移指令
+  - 条件转移 (ifeq, iflt...)
+  - 符合条件转移 (tableswitch, lookupswitch)
+  - 无条件转移 (goto, jsr...)
+
+
+
+- for 语句的字节码
+
+- switch case 实现
+
+- String 的 switch case
+
+  通过 hashCode 比较，如果相同调用 String#equals 方法再次比较
+
+- i ++, ++ i
+
+- try catch finally
+
+  编译器采用复制 finally 代码的方式，将内容插入到 try 和 catch 代码中所有正常退出 和 异常退出之前
+
+  返回值会被暂存，finally 中修改返回值不起作用
+
+- try with resources
+
+  try 和 finally 都抛出了异常，try 中的异常会被覆盖掉 (因为 finally 中的代码块会在 try 抛出异常前插入导致 finally 中的异常提前返回)
+
+  使用 `java.lang.Throwable#addSuppressed` 避免忽略 try 中重要的异常
+
+- 对象相关的字节码指令
+
+  - init 方法：
+
+    对象初始化方法，类的构造方法，非静态变量的初始化，对象初始化代码块
+
+    成员变量的初始化 和 初始化语句 会被统一编译进 init 方法 (这就是为什么初始化成员变量会抛异常的情况下，需要将构造函数方法声明加上 throw 语句，否则编译不通过)
+
+  - new, dup, invokespecial 创建对象
+
+  - clinit 方法
+
+
+
+
+
+
+
+
+
