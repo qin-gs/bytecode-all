@@ -258,13 +258,82 @@ StackOverflowError：线程请求分配的栈容量超过虚拟机允许的最�
 
   - new, dup, invokespecial 创建对象
 
+    创建一个类示例引用，复杂一个类对象示例的引用，调用 init 方法用构造函数，将对象引用存储到局部变量表
+  
   - clinit 方法
+  
+    静态初始化方法，类静态代码块，静态变量初始化
+  
+    该方法的调用场景
+  
+    - 创建类对象：new, 反射, 反序列化
+    - 访问类的静态变量 或 静态方法
+    - 访问类的静态字段 或 对静态字段赋值
+    - 初始化某个类的子类
 
 
 
+#### 3. 字节码进阶
+
+##### 方法调用指令
+
+- invokestatic：调用静态方法
+
+  静态绑定
+
+- invokespecial：私有实例方法，构造函数，用 super 调用父类实例方法
+
+  运行时动态选择具体的子类方法进行调用
+
+- invokevirtual：非私有实例方法
+
+  - 实例构造函数方法 init
+  - private 修饰的私有实例方法 (不会被继承，编译器可以确定)
+  - 使用 super 调用父类方法
+
+- invokeinterface：接口方法
+
+  需要运行时根据对象类型确定目标方法
+
+  方法分派
+
+  创建虚方法表 vtable(虚方法)，itable(支持多接口实现 offset table + method table) 
+
+  - 多态的基础
+  - 子类继承父类的 vtable，一个空类的 vtable 大小为 5 (继承自 Object)
+  - 被 final + static，private 修饰的方法不会出现在 vtable 中，因为不能被重写
+  - 接口方法调用使用 invokeinterface 指令，使用 itable 支持多接口的实现，itable 由 offset table 和 method table 两部分组成。调用接口方法是，现在 offset table 中查找 method table 的偏移量位置，然后在 method table 查找具体的接口实现
+
+- invokedynamic：动态方法
+
+  强类型语言：在编译时检查传入参数的类型 和 返回值的类型
+
+  方法句柄 `java.lang.invoke.MethodHandler`：使得 java 可以把函数当作参数进行传递
+
+  调用流程
+
+  - jvm 首次执行 invokedynamic 指令时会调用引导方法 (bootstrap method)
+  - 引导方法返回一个 CallSite 对象，该对象内部根据方法签名进行目标方法查找；getTarget 方法返回方法句柄对象
+  - CallSite 对象没有变化的情况下，方法句柄可以一直被调用，如果有变化需要重新查找
+
+  优点
+
+  - 标准化：使用 Bootstrap Method, Callsite, MethodHandler 使得动态调用方法得到统一
+  - 保持字节码层的统一 和 向后兼容，把动态方法的分派逻辑下放到语言实现层，未来可以进行优化修改
+  - 高性能：接近原生 java 调用的性能，使用 jit 优化
 
 
 
+##### lambda 原理
+
+```java
+public static CallSite metafactory(MethodHandles.Lookup caller,
+                                   String invokedName,
+                                   MethodType invokedType,
+                                   MethodType samMethodType,
+                                   MethodHandle implMethod,
+                                   MethodType instantiatedMethodType)
+```
 
 
 
