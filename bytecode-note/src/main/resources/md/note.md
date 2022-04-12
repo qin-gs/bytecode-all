@@ -326,14 +326,239 @@ StackOverflowError：线程请求分配的栈容量超过虚拟机允许的最�
 
 ##### lambda 原理
 
+匿名内部类会生成两个 class 文件
+
+- lambda 表达式声明的地方会生成一个 invokedynamic  指令，同时编译生成一个对应的引导方法 (Bootstrap method)
+- 第一次执行 invokedynamic 指令时，会调用对应的引导方法 (Bootstrap method)，该方法会调用 `java.lang.invoke.LambdaMetafactory#metafactory` 方法动态生成内部类
+- 引导方法返回 ` java.lang.invoke.CallSite` 对象，该对象的 `getTarget` 返回目标方法的句柄，该对象最终会调用实现了 Runnable 接口的内部类
+- lambda 表达式中的内容会被编译成静态方法，前面动态生成的内部类会直接调用该静态方法
+- 真正执行 lambda 调用的时 invokeinterface 指令
+
 ```java
-public static CallSite metafactory(MethodHandles.Lookup caller,
-                                   String invokedName,
-                                   MethodType invokedType,
-                                   MethodType samMethodType,
-                                   MethodHandle implMethod,
-                                   MethodType instantiatedMethodType)
+public static CallSite metafactory(
+    MethodHandles.Lookup caller, // caller 供 jvm 查找的上下文
+    String invokedName, // 调用函数名
+    MethodType invokedType,
+    MethodType samMethodType, // 函数式接口定义的方法签名(参数类型 + 返回值)
+    MethodHandle implMethod, // 编译时生成的 lambda 表达式对应的静态方法
+    MethodType instantiatedMethodType); // 一般和 samMethodType 一样
+
+// 该方法创建 java.lang.invoke.InnerClassLambdaMetafactory 对象，采用 asm 技术动态生成新的内部类 (lambda所在类名$$Lambda$n)
+    
 ```
+
+Lambda 表达式采用的方式并不是在编译期间生成匿名内部类，而是**提供一个稳定的字节码二进制表示规范**，对用户而言看到的只有 invokedynamic 这样一个非常 简单的指令。
+
+用 invokedynamic 来实现把方法翻译的逻辑隐藏在 JDK 的实现中，后续想替换实现方式非常简单，只用修改LambdaMetafactory.metafactory 里面的逻辑就可以了。
+
+这种方法把 Lambda 翻译的策略由编译期间**推迟到运行**时，未来的 JDK 会怎样实现 Lambda 表达式可能还会有
+变化。
+
+
+
+##### 泛型 与 字节码
+
+泛型擦除
+
+java 的泛型时在 javac 编译器中实现的，生成的字节码中已经不包含泛型信息
+
+- 泛型没有自己的 class 对象
+- 泛型不能用原始类型
+- 不能捕获泛型异常
+- 不能声明泛型数组
+
+
+
+##### synchronized 原理
+
+定义一个 临界区 (critical section，一次只能被一个线程执行的代码片段)
+
+检查方法的访问标记，判断是不是同步的，如果是(ACC_SYNCHRONIZED = 1)：
+
+- 实例方法：将当前实例对象 this 作为监视器
+- 类方法：将当前类的类对象作为监视器
+- 代码块：用户自定义的对象
+
+
+
+monitorenter：执行到该指令时，会尝试获取栈顶对象对应监视器的所有权
+
+- 成功获取：计数器置为 1
+- 已经拥有：计数器 + 1
+- 获取失败：阻塞当前线程至计数器变为 0
+
+monitorexit：执行到该指令时，将计数器-1，计数器为 0 后，释放锁
+
+编译器需要保证无论同步代码块中以何种方式结束，如果调用了 minitorenter 必须调用 monitorexit 指令；所以 编译器会自动生成一个异常处理器，一个 monitorenter 会对应 两个 monitorexit 指令
+
+```java
+public void foo() throws Throwable {
+    monitorenter(lock);
+    try {
+        bar();
+    } finally {
+        monitorexit(lock);
+    }
+}
+
+// 虚拟机会将 finally 中的代码复制到方法正常退出和异常退出的地方
+pulic void foo() throw Throwable {
+    monitorenter(lock);
+    try {
+        bar();
+        monitorexit(lock);
+    } catch(Throwable t) {
+        monitorexit(lock);
+    }
+}
+```
+
+
+
+##### 反射的实现原理
+
+`jdk.internal.reflect.MethodAccessor#invoke`
+
+`jdk.internal.reflect.NativeMethodAccessorImpl#invoke`
+
+前 15 次会调用一个 native 方法 `jdk.internal.reflect.NativeMethodAccessorImpl#invoke`，
+
+15 次之后使用 GeneratedMethodAccessor1 调用反射方法，MethodAccessorGenerator 通过 asm 生成新的类 GeneratedMethodAccessor1
+
+
+
+
+
+#### 4. javac 编译原理简介
+
+词法分析 语法分析 语义分析 生成中间代码 (前端编译)
+
+代码优化 生成目标代码 (后端编译)
+
+
+
+##### 源码准备
+
+[openjdk javac 源码](http://hg.openjdk.java.net/jdk8/jdk8/langtools/)
+
+
+
+##### javac 的七个阶段
+
+- parse：
+
+  - 词法分析(`com.sun.tools.javac.parser.Scanner`)：将源代码拆分成 词法记号 token
+  - 语法分析(`com.sun.tools.javac.parser.JavacParser`)：递归下降，生成抽象语法树
+
+- enter：解析填充符号表 (标识符，标识符类型，作用域等)
+
+  `com.sun.tools.javac.comp.Enter`，`com.sun.tools.javac.comp.MemberEnter`
+
+  符号表：`com.sun.tools.javac.code.Symbol`
+
+- process：处理注解
+
+  `com.sun.tools.javac.processing.JavacProcessingEnvironment ` lombok
+
+- attribute：检查语义合法性，常量折叠
+
+  `com.sun.tools.javac.comp`包下面
+
+  (检查变量类型，方法返回值类是否合法，是否有重复变量，类定义等)
+
+  `com.sun.tools.javac.comp.Check#checkType` 检查方法返回值类型是否与声明的类型一致
+
+  `com.sun.tools.javac.comp.Check#checkUnique` 检查是否有重复的定义(变量，方法)
+
+  `com.sun.tools.javac.comp.Resolve` 检查变量，方法，类访问是否合法；为重载选择最具体的方法
+
+  `com.sun.tools.javac.comp.ConstFold` 合并常量 (字符串象加，常量整数运算)
+
+  `com.sun.tools.javac.comp.Infer` 推导泛型方法的参数类型
+
+- flow：数据流分析
+
+  `com.sun.tools.javac.comp.Flow`
+
+  检查非 void 方法是否所有退出分支都有返回值
+
+  检查受检异常是否被捕获 或 抛出
+
+  检查局部变量是否被初始化
+
+  检查 final 是否重复赋值
+
+  检查是否有语句不可达
+
+- desugar：去除语法糖
+
+  泛型，内部类，try with resources，foreach，原始类型 和 包装类型转换，switch(字符串，枚举)，i++ ++i，变长参数 ...
+
+  `com.sun.tools.javac.comp.TransTypes`：处理 泛型擦除 和 插入类型转换代码
+
+  `com.sun.tools.javac.comp.Lower`：除泛型外的其它
+
+  
+
+  javac 为枚举的每个 switch 生成一个中间类，该类包含一个 SwitchMap 数组，该数组维护 枚举 ordinal 值 和 递增整数序列的映射关系
+
+- generate：生成字节码
+
+  遍历抽象语法树生成最终的 class 文件 `com.sun.tools.javac.jvm.Gen`
+
+  - 初始化代码块收集到 init 和 clinit 方法
+
+  - 将字符串拼接转换成 StringBuilder#append
+
+  - 为 synchronized 生成异常表，保证 monitorenter 和 monitorexit 成对调用
+
+  - 选择 switch 中使用 tabkeswitch 或 lookupswitch
+
+    case 较稀疏时，使用 lookupswitch
+
+    较密集时，使用 tableswitch
+
+  
+
+#### 5. 从字节码层面看 kotlin 语言
+
+
+
+#### 6. asm 和 javassist 字节码操作工具
+
+
+
+##### asm 介绍
+
+- 基于事件触发的 core api (按顺序单向解析)
+- 基于对象的 tree api (将整个结构读入内存)
+
+三个核心类
+
+- ClassReader赋值读取类文件字节数组，accept 调用之后该类把解析过程中的事件通知给 ClassVisitor 调用不同 visit方法
+
+- ClassVisitor：在 visit 方法中对字节码进行修改
+
+- ClassWriter：生成修改过的字节码
+
+
+
+##### javassist 介绍
+
+每个需要编辑的 class 对应一个 CtClass 实例，存储在 ClassPool 中
+
+
+
+
+
+#### 7. Java Instrumentation 原理
+
+
+
+##### 简介
+
+java.lang.instrument 包实现字节码增强；可以对已加载 和 未加载的类进行修改
+
 
 
 
