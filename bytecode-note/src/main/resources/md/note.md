@@ -555,10 +555,36 @@ pulic void foo() throw Throwable {
 
 
 
-##### 简介
+##### Java Instrumentation 简介
 
 java.lang.instrument 包实现字节码增强；可以对已加载 和 未加载的类进行修改
 
 
 
+#####  Java Instrumentation  与 -javaagent 启动参数
 
+使用 MANIFEST.MF 文件指定 Premain-Class 等信息，虚拟机级别的 aop
+
+
+
+##### Jvm attach api 介绍
+
+
+
+
+
+#### 8. JSR 269 插件化注解处理原理
+
+
+
+##### JSR 269 简介
+
+允许开发者在编译期间对注解进行处理，可以读取修改添加抽象语法树中的内容
+
+
+
+##### 抽象语法树操作 api
+
+- import com.sun.tools.javac.api.JavacTrees：语法树元素的基类
+- import com.sun.tools.javac.tree.TreeMaker：创建语法树节点
+- import com.sun.tools.javac.util.Names：访问标识符方法
