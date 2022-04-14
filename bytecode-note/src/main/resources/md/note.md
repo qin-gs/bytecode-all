@@ -512,7 +512,7 @@ pulic void foo() throw Throwable {
 
   - 为 synchronized 生成异常表，保证 monitorenter 和 monitorexit 成对调用
 
-  - 选择 switch 中使用 tabkeswitch 或 lookupswitch
+  - 选择 switch 中使用 tableswitch 或 lookupswitch
 
     case 较稀疏时，使用 lookupswitch
 
@@ -588,3 +588,22 @@ java.lang.instrument 包实现字节码增强；可以对已加载 和 未加载
 - import com.sun.tools.javac.api.JavacTrees：语法树元素的基类
 - import com.sun.tools.javac.tree.TreeMaker：创建语法树节点
 - import com.sun.tools.javac.util.Names：访问标识符方法
+
+
+
+##### lombok 原理
+
+javac 在编译过程中会扫描所有jar包 `META-INF/services` 目录下的`javax.annotation.processing.Processor` 文件，该文件中指定了注解处理类 `lombok.launch.AnnotationProcessorHider$AnnotationProcessor` 
+
+该类会新建一个类加载器，加载 jar 包中所有以 .SCL.lombok 结尾的文件；这些 handler 处理不同的注解类，`HandlerEqualsAndHashCode.SCL.lombok` 处理 `@EqualsAndHashCode` 注解
+
+lombok 通过 jsr269 的 api，在编译期间的 AnnotationProcess 阶段根据不同的 lombok注解调用不同的 Handler 修改了抽象语法树，达到增强字节码的效果
+
+
+
+
+
+#### 9. 字节码的应用
+
+##### cglib 动态代理原理分析
+
