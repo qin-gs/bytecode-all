@@ -1,5 +1,6 @@
 package com.example.cglib;
 
+import net.sf.cglib.core.DebuggingClassWriter;
 import net.sf.cglib.proxy.Enhancer;
 import net.sf.cglib.proxy.MethodInterceptor;
 import net.sf.cglib.proxy.MethodProxy;
@@ -9,6 +10,9 @@ import java.lang.reflect.Method;
 public class CglibFoo {
 
     public static void main(String[] args) {
+
+        System.setProperty(DebuggingClassWriter.DEBUG_LOCATION_PROPERTY, "./");
+
         MethodInterceptor interceptor = new MethodInterceptor() {
             @Override
             public Object intercept(Object obj, Method method, Object[] args, MethodProxy proxy) throws Throwable {

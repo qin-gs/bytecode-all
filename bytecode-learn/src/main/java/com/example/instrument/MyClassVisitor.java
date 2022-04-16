@@ -7,7 +7,7 @@ import jdk.internal.org.objectweb.asm.Opcodes;
 public class MyClassVisitor extends jdk.internal.org.objectweb.asm.ClassVisitor {
 
     public MyClassVisitor(ClassVisitor classVisitor) {
-        super(Opcodes.ASM6, classVisitor);
+        super(Opcodes.ASM5, classVisitor);
     }
 
     @Override
